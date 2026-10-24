@@ -90,7 +90,7 @@ The map and search need no keys.
 - **Usage policy:** at most 1 request/second from the server across all users (global throttle), an identifying `User-Agent`, cache results, show attribution.
 - Only allowlisted tags ever reach the query.
 - Dedupe by `osm_type/osm_id`. Give each tag an equal share of the 50 results, nearest first.
-- **Cache** table keyed by `(sorted tags, round(lat,2), round(lng,2))` with a `jsonb` results column and `fetched_at`. Reuse rows younger than 30 days. A cache failure must fall back to a live search, never fail it.
+- **Cache** one row per tag, keyed by `(tag, round(lat,2), round(lng,2))` so searches sharing a tag reuse it, with a `jsonb` results column and `fetched_at`. Reuse rows younger than 30 days. A cache failure must fall back to a live search, never fail it.
 - Overpass was tried first and dropped: the public servers took 25–60+ s or timed out.
 
 ## Directions
@@ -109,7 +109,7 @@ Modes: `driving`, `two-wheeler` (Motorcycle; very common in PH), `transit` (Comm
 
 ## Out of scope (do not build)
 
-Accounts/login, saved companies, more job sources (Careerjet; Adzuna doesn't cover PH), in-map route drawing, rate limiting (note it in README as required before public launch), deployment.
+Accounts/login, saved companies, more job sources (Careerjet; Adzuna doesn't cover PH), in-map route drawing, deployment. Rate limiting: 10 valid searches per IP per hour (in memory; `TRUST_PROXY=1` behind a host proxy).
 
 ## Phases
 

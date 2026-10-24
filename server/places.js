@@ -73,11 +73,9 @@ function address(a = {}) {
   return [street, a.suburb, a.city ?? a.town ?? a.municipality].filter(Boolean).join(', ');
 }
 
-// One Nominatim search per tag; db is anything with pg's query(text, params), null disables the cache.
-export async function searchPlaces(tags, lat, lng, db = pool) {
-  if (!tags.length || !tags.every((t) => Object.hasOwn(TAGS, t))) throw new Error('Unknown OSM tag');
-  const key = [[...tags].sort().join(','), lat.toFixed(2), lng.toFixed(2)];
-
+// Companies for one tag near a point, cached per tag so searches that share a tag reuse it.
+async function tagCompanies(tag, lat, lng, db) {
+  const key = [tag, lat.toFixed(2), lng.toFixed(2)];
   if (db) {
     // shortcut: rows older than 30 days are ignored but never purged; add a periodic DELETE if the table grows.
     // A broken cache must not break search: fall through to Nominatim.
@@ -92,23 +90,10 @@ export async function searchPlaces(tags, lat, lng, db = pool) {
     }
   }
 
-  const results = [];
-  for (const tag of tags) results.push(...await searchTag(tag, lat, lng)); // sequential: see throttle
-
-  const kx = Math.cos((lat * Math.PI) / 180); // longitude degrees shrink away from the equator
-  const byId = new Map();
-  for (const r of results) {
-    const c = { placeId: `${r.osm_type}/${r.osm_id}`, name: r.name, address: address(r.address), lat: Number(r.lat), lng: Number(r.lon),
-      website: r.extratags?.website ?? r.extratags?.['contact:website'] ?? null, tag: r.tag };
-    if (c.name && Number.isFinite(c.lat) && Number.isFinite(c.lng) && !byId.has(c.placeId)) byId.set(c.placeId, c);
-  }
-  const dist = (c) => Math.hypot(c.lat - lat, (c.lng - lng) * kx);
-  // Equal share per tag, so dense categories (banks) don't crowd out the rest.
-  const perTag = Math.ceil(MAX_RESULTS / tags.length);
-  const companies = tags
-    .flatMap((tag) => [...byId.values()].filter((c) => c.tag === tag).sort((a, b) => dist(a) - dist(b)).slice(0, perTag))
-    .sort((a, b) => dist(a) - dist(b))
-    .slice(0, MAX_RESULTS);
+  const companies = (await searchTag(tag, lat, lng))
+    .map((r) => ({ placeId: `${r.osm_type}/${r.osm_id}`, name: r.name, address: address(r.address), lat: Number(r.lat), lng: Number(r.lon),
+      website: r.extratags?.website ?? r.extratags?.['contact:website'] ?? null, tag }))
+    .filter((c) => c.name && Number.isFinite(c.lat) && Number.isFinite(c.lng));
 
   if (db) {
     try {
@@ -122,4 +107,23 @@ export async function searchPlaces(tags, lat, lng, db = pool) {
     }
   }
   return companies;
+}
+
+// db is anything with pg's query(text, params); null disables the cache.
+export async function searchPlaces(tags, lat, lng, db = pool) {
+  if (!tags.length || !tags.every((t) => Object.hasOwn(TAGS, t))) throw new Error('Unknown OSM tag');
+
+  const byId = new Map();
+  for (const tag of tags) { // sequential: see throttle
+    for (const c of await tagCompanies(tag, lat, lng, db)) if (!byId.has(c.placeId)) byId.set(c.placeId, c);
+  }
+
+  const kx = Math.cos((lat * Math.PI) / 180); // longitude degrees shrink away from the equator
+  const dist = (c) => Math.hypot(c.lat - lat, (c.lng - lng) * kx);
+  // Equal share per tag, so dense categories (banks) don't crowd out the rest.
+  const perTag = Math.ceil(MAX_RESULTS / tags.length);
+  return tags
+    .flatMap((tag) => [...byId.values()].filter((c) => c.tag === tag).sort((a, b) => dist(a) - dist(b)).slice(0, perTag))
+    .sort((a, b) => dist(a) - dist(b))
+    .slice(0, MAX_RESULTS);
 }

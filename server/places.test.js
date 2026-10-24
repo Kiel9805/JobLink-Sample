@@ -74,9 +74,12 @@ test('a second identical search is a cache hit with no Nominatim call', async (t
   const fetchMock = t.mock.method(globalThis, 'fetch', nominatimReply);
   const db = fakeDb();
   const first = await searchPlaces(['office=it', 'amenity=bank'], 14.5512, 121.0234, db);
-  const second = await searchPlaces(['amenity=bank', 'office=it'], 14.5549, 121.0201, db); // same key after sorting + rounding
+  const second = await searchPlaces(['office=it', 'amenity=bank'], 14.5549, 121.0201, db); // same keys after rounding
   assert.equal(fetchMock.mock.callCount(), 2);
   assert.deepEqual(second, first);
+  await searchPlaces(['office=it', 'office=company'], 14.5512, 121.0234, db); // overlaps: only the new tag is fetched
+  assert.equal(fetchMock.mock.callCount(), 3);
+  assert.equal(fetchMock.mock.calls[2].arguments[0].searchParams.get('q'), '[office=company]');
 });
 
 test('a failing cache falls back to Nominatim instead of failing the search', async (t) => {

@@ -42,7 +42,7 @@ Resumes are sent to Gemini and never stored or logged. Use Gemini's **paid tier*
 
 ## Known limits (before a public launch)
 
-- **No rate limiting.** Every search costs a Gemini call, so add per-IP limits before going public.
+- **Rate limit:** 10 searches per IP per hour, kept in memory (resets on restart, not shared across instances). When hosted behind a proxy, set `TRUST_PROXY=1`.
 - **Free OSM services are for light use.** Nominatim allows 1 request/second (the server enforces this, so each search takes a few seconds and searches queue under load). The public map tiles are also for light use. For real traffic, switch to a hosted provider (e.g. LocationIQ, Geoapify, MapTiler) or self-host.
 - **OSM coverage varies.** Many PH businesses are missing or untagged, and there are no ratings.
 - Old cache rows (over 30 days) are ignored but never deleted.

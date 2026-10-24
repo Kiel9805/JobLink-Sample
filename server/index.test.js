@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 delete process.env.DATABASE_URL; // route tests never touch a real cache
 process.env.JOOBLE_API_KEY = 'secret-jooble-key';
 process.env.GEMINI_API_KEY = 'secret-gemini-key';
+process.env.TRUST_PROXY = '1'; // lets tests pick a visitor IP via X-Forwarded-For
 const { app } = await import('./index.js');
 (await import('./places.js')).throttle.gapMs = 0;
 
@@ -13,7 +14,11 @@ before(() => new Promise((ok) => { server = app.listen(0, '127.0.0.1', () => { b
 after(() => { server.closeAllConnections(); server.close(); });
 
 const pdf = Buffer.from('%PDF-1.4 test').toString('base64');
-const post = (body) => realFetch(`${base}/api/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+const post = (body, ip = '198.51.100.1') => realFetch(`${base}/api/search`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
+  body: typeof body === 'string' ? body : JSON.stringify(body),
+});
 
 const profile = { titles: ['Dev'], skills: ['JS'], industries: ['Tech'], searchQueries: [{ tag: 'office=it', why: 'You code' }, { tag: 'amenity=bank', why: 'You know finance' }] };
 const result = (id) => ({ osm_type: 'node', osm_id: id, name: `Co ${id}`, lat: '14.55', lon: '121.02' });
@@ -74,4 +79,15 @@ test('POST /api/search returns 502 when Gemini or Nominatim fails', async (t) =>
   const res = await post({ pdfBase64: pdf, lat: 14.55, lng: 121.02 });
   assert.equal(res.status, 502);
   assert.equal(typeof (await res.json()).error, 'string');
+});
+
+test('POST /api/search allows 10 valid searches per IP per hour, then 429 JSON', async (t) => {
+  t.mock.method(globalThis, 'fetch', upstream);
+  const body = { pdfBase64: pdf, lat: 14.55, lng: 121.02 };
+  for (let i = 0; i < 10; i++) assert.equal((await post(body, '203.0.113.7')).status, 200);
+  const res = await post(body, '203.0.113.7');
+  assert.equal(res.status, 429);
+  assert.match((await res.json()).error, /10 searches/);
+  assert.equal((await post({}, '203.0.113.7')).status, 400); // invalid input is still answered, and isn't counted
+  assert.equal((await post(body, '203.0.113.8')).status, 200); // other visitors are unaffected
 });

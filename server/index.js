@@ -10,7 +10,24 @@ import { findJobs } from './jobs.js';
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 const inPH = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= 4 && lat <= 22 && lng >= 116 && lng <= 127;
 
+// Each search costs a Gemini call, so cap valid searches per IP.
+// shortcut: in-memory counts reset on restart and aren't shared between instances; move to Postgres if you run more than one.
+const SEARCHES_PER_HOUR = 10;
+const searches = new Map(); // ip -> { count, resetAt }
+function overLimit(ip) {
+  const now = Date.now();
+  if (searches.size > 10000) for (const [k, v] of searches) if (v.resetAt <= now) searches.delete(k);
+  const s = searches.get(ip);
+  if (!s || s.resetAt <= now) {
+    searches.set(ip, { count: 1, resetAt: now + 60 * 60 * 1000 });
+    return false;
+  }
+  return ++s.count > SEARCHES_PER_HOUR;
+}
+
 export const app = express();
+// Behind a host's proxy (e.g. Render), set TRUST_PROXY=1 so req.ip is the visitor, not the proxy. Never set it without a proxy: visitors could fake their IP.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY));
 app.use(express.json({ limit: '7mb' }));
 app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 
@@ -23,6 +40,7 @@ app.post('/api/search', async (req, res) => {
   const pdf = Buffer.from(pdfBase64.replace(/^data:[^,]*,/, ''), 'base64');
   if (pdf.length > MAX_PDF_BYTES) return res.status(400).json({ error: 'PDF must be 5 MB or smaller' });
   if (pdf.subarray(0, 4).toString('latin1') !== '%PDF') return res.status(400).json({ error: 'File is not a PDF' });
+  if (overLimit(req.ip)) return res.status(429).json({ error: `You've reached ${SEARCHES_PER_HOUR} searches this hour. Please try again later.` });
 
   let profile;
   try {
