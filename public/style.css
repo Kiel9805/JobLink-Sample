@@ -1,0 +1,83 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
+  color: #1a1a1a;
+  background: #fff;
+}
+
+header h1 { margin: 16px 0 4px; }
+header p { margin: 0 0 12px; }
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+form label { font-weight: 600; width: 100%; }
+form input[type="file"] { max-width: 100%; }
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+  border: 1px solid #1a56db;
+  border-radius: 6px;
+  background: #1a56db;
+  color: #fff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: wait; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
+#location { margin: 8px 0 0; font-size: 0.9rem; color: #444; }
+#status { min-height: 1.4em; margin: 4px 0 8px; }
+#status.error { color: #b91c1c; font-weight: 600; }
+
+main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+#map {
+  height: 60vh;
+  min-height: 300px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f3f4f6;
+}
+.map-message { margin: 0; padding: 16px; }
+
+aside h2 { font-size: 1.1rem; margin: 0 0 8px; }
+#profile { margin-bottom: 16px; }
+#profile p { margin: 4px 0; }
+
+#results { list-style: none; margin: 0; padding: 0; }
+#results li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+#results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  color: #1a56db;
+  border: none;
+  padding: 4px 0;
+  font-weight: 600;
+}
+#results .address { display: block; font-size: 0.85rem; color: #555; }
+
+.company { max-width: 280px; }
+#details .company { max-width: none; margin-top: 16px; }
+.company h3 { margin: 0 0 4px; font-size: 1rem; }
+.company p { margin: 4px 0; }
+.company .why { font-style: italic; }
+
+@media (min-width: 768px) {
+  main { grid-template-columns: 2fr 1fr; }
+  #map { height: 75vh; }
+  aside { max-height: 75vh; overflow-y: auto; }
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JobLink</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>JobLink</h1>
+    <p>Upload your resume to find companies near you that fit your experience.</p>
+  </header>
+
+  <form id="search-form">
+    <label for="resume">Resume (PDF, max 5 MB)</label>
+    <input id="resume" name="resume" type="file" accept="application/pdf" required>
+    <button type="submit" id="search-btn">Find companies</button>
+  </form>
+
+  <p id="location" aria-live="polite">Getting your location…</p>
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <main>
+    <div id="map" role="region" aria-label="Map of matching companies"></div>
+    <aside>
+      <section id="profile" hidden>
+        <h2>Your profile</h2>
+        <p><strong>Titles:</strong> <span id="profile-titles"></span></p>
+        <p><strong>Skills:</strong> <span id="profile-skills"></span></p>
+      </section>
+      <h2 id="results-heading" hidden>Companies</h2>
+      <ul id="results" aria-labelledby="results-heading"></ul>
+      <div id="details" aria-live="polite"></div>
+    </aside>
+  </main>
+</body>
+</html>
