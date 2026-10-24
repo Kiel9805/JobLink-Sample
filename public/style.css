@@ -56,8 +56,19 @@ aside h2 { font-size: 1.1rem; margin: 0 0 8px; }
 #profile { margin-bottom: 16px; }
 #profile p { margin: 4px 0; }
 
-#results { list-style: none; margin: 0; padding: 0; }
-#results li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+#results, #jobs { list-style: none; margin: 0; padding: 0; }
+#results li, #jobs li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+#jobs { margin-bottom: 16px; }
+#jobs p { margin: 2px 0; }
+#jobs .job-title { font-weight: 600; }
+#jobs .address { font-size: 0.85rem; color: #555; }
+#jobs .snippet {
+  font-size: 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 #results button {
   display: block;
   width: 100%;

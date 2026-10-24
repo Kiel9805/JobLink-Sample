@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 delete process.env.DATABASE_URL; // route tests never touch a real cache
+process.env.JOOBLE_API_KEY = 'secret-jooble-key';
 process.env.GEMINI_API_KEY = 'secret-gemini-key';
 const { app } = await import('./index.js');
 (await import('./places.js')).throttle.gapMs = 0;
@@ -16,9 +17,12 @@ const post = (body) => realFetch(`${base}/api/search`, { method: 'POST', headers
 
 const profile = { titles: ['Dev'], skills: ['JS'], industries: ['Tech'], searchQueries: [{ tag: 'office=it', why: 'You code' }, { tag: 'amenity=bank', why: 'You know finance' }] };
 const result = (id) => ({ osm_type: 'node', osm_id: id, name: `Co ${id}`, lat: '14.55', lon: '121.02' });
-const upstream = async (url) => String(url).includes('generativelanguage')
-  ? Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(profile) }] } }] })
-  : Response.json([result(url.searchParams.get('q') === '[office=it]' ? 1 : 2)]);
+const upstream = async (url) => {
+  if (String(url).includes('generativelanguage')) return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(profile) }] } }] });
+  if (String(url).includes('jooble')) return Response.json({ jobs: [{ id: 9, title: 'Dev', company: 'Co 1', link: 'https://jooble.org/desc/9' }] });
+  if (url.pathname === '/reverse') return Response.json({ address: { city: 'Makati' } });
+  return Response.json([result(url.searchParams.get('q') === '[office=it]' ? 1 : 2)]);
+};
 
 test('POST /api/search rejects bad input with 400 JSON', async (t) => {
   const fetchMock = t.mock.method(globalThis, 'fetch', upstream);
@@ -50,6 +54,17 @@ test('POST /api/search returns profile + companies with their "why", and no keys
   assert.deepEqual(p, { titles: ['Dev'], skills: ['JS'], industries: ['Tech'] });
   assert.deepEqual(companies.map((c) => [c.placeId, c.why]), [['node/1', 'You code'], ['node/2', 'You know finance']]);
   assert.ok(companies.every((c) => !('tag' in c)));
+  assert.deepEqual(JSON.parse(text).jobs.map((j) => j.title), ['Dev']);
+});
+
+test('POST /api/search still returns companies when Jooble fails', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => String(url).includes('jooble') ? new Response('', { status: 500 }) : upstream(url));
+  const res = await post({ pdfBase64: pdf, lat: 14.55, lng: 121.02 });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.companies.length, 2);
+  assert.deepEqual(body.jobs, []);
 });
 
 test('POST /api/search returns 502 when Gemini or Nominatim fails', async (t) => {

@@ -8,7 +8,7 @@ You review JobLink. You change no files. Read `docs/master-prompt.md`, then all 
 
 Check, in this order:
 1. **Privacy:** resume bytes or extracted text are never written to disk, DB or logs, including error paths.
-2. **Secrets:** `GEMINI_API_KEY` and `DATABASE_URL` never reach the browser or a response. `.env` is gitignored, and no real key is committed anywhere.
+2. **Secrets:** `GEMINI_API_KEY`, `JOOBLE_API_KEY` (also in the Jooble URL, so never log it) and `DATABASE_URL` never reach the browser or a response. `.env` is gitignored, and no real key is committed anywhere.
 3. **Input validation:** body/PDF size limits, `%PDF` check, PH lat/lng bounds, and the Gemini response shape is validated before use.
 4. **Injection:** no `innerHTML` (or similar) with API data, SQL is fully parameterized, and links built from API data are safe.
 5. **Cost and fair use:** tags are capped at 5 and allowlisted, Nominatim's 1 request/second limit and User-Agent are enforced, the cache is used, and a cache hit really skips the call.

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { pool } from './db.js';
 import { extractProfile } from './gemini.js';
 import { searchPlaces } from './places.js';
+import { findJobs } from './jobs.js';
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 const inPH = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= 4 && lat <= 22 && lng >= 116 && lng <= 127;
@@ -33,10 +34,14 @@ app.post('/api/search', async (req, res) => {
 
   try {
     const whyByTag = new Map(profile.searchQueries.map(({ tag, why }) => [tag, why]));
-    const places = await searchPlaces([...whyByTag.keys()], lat, lng);
+    const [places, jobs] = await Promise.all([
+      searchPlaces([...whyByTag.keys()], lat, lng),
+      // Job listings are a bonus: their failure must not lose the company results.
+      findJobs(profile.titles[0], lat, lng).catch((err) => { console.error(err.message); return []; }),
+    ]);
     const companies = places.map(({ tag, ...c }) => ({ ...c, why: whyByTag.get(tag) }));
     const { titles, skills, industries } = profile;
-    res.json({ profile: { titles, skills, industries }, companies });
+    res.json({ profile: { titles, skills, industries }, companies, jobs });
   } catch (err) {
     console.error(err.message);
     res.status(502).json({ error: 'Could not search for companies' });

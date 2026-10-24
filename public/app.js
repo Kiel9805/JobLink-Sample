@@ -152,6 +152,20 @@ function renderResults(data) {
   $('profile-skills').textContent = (profile.skills || []).join(', ') || '—';
   $('profile').hidden = false;
 
+  const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+  $('jobs-heading').hidden = !jobs.length;
+  $('jobs').replaceChildren(...jobs.map((j) => {
+    const li = el('li');
+    const href = safeHttpUrl(j.link);
+    const title = el('p', null, 'job-title');
+    title.append(href ? link(href, j.title) : j.title);
+    li.append(title);
+    const meta = [j.company, j.location, j.salary].filter(Boolean).join(' · ');
+    if (meta) li.append(el('p', meta, 'address'));
+    if (j.snippet) li.append(el('p', j.snippet, 'snippet'));
+    return li;
+  }));
+
   companies = Array.isArray(data.companies) ? data.companies : [];
   $('details').replaceChildren();
   $('results-heading').hidden = false;
@@ -165,7 +179,8 @@ function renderResults(data) {
     return li;
   }));
   renderMarkers();
-  setStatus(companies.length ? `Found ${companies.length} companies.` : 'No matching companies found near this location.');
+  const found = [jobs.length && `${jobs.length} job openings`, companies.length && `${companies.length} companies`].filter(Boolean);
+  setStatus(found.length ? `Found ${found.join(' and ')}.` : 'No matching companies or jobs found near this location.');
 }
 
 async function onSubmit(e) {

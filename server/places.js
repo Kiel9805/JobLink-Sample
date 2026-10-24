@@ -36,26 +36,36 @@ const MAX_RESULTS = 50;
 export const throttle = { gapMs: 1100 };
 let nextSlot = 0;
 
-async function nominatim(tag, lat, lng) {
+async function nominatim(path, params) {
   const wait = Math.max(0, nextSlot - Date.now());
   nextSlot = Date.now() + wait + throttle.gapMs;
   if (wait) await new Promise((ok) => setTimeout(ok, wait));
 
+  const url = new URL(path, 'https://nominatim.openstreetmap.org');
+  url.search = new URLSearchParams({ ...params, format: 'jsonv2' });
+  // The policy also asks clients to identify themselves.
+  const res = await fetch(url, { headers: { 'User-Agent': 'JobLink/0.1 (https://github.com/Kiel9805/JobLink-Sample)' } });
+  if (!res.ok) throw new Error(`Nominatim request failed (${res.status})`);
+  return res.json();
+}
+
+async function searchTag(tag, lat, lng) {
   const dLng = RADIUS_DEG / Math.cos((lat * Math.PI) / 180);
-  const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.search = new URLSearchParams({
+  const results = await nominatim('/search', {
     q: `[${tag}]`, // special-phrase syntax: places with this OSM tag
     viewbox: [lng - dLng, lat + RADIUS_DEG, lng + dLng, lat - RADIUS_DEG].join(','),
     bounded: '1',
-    format: 'jsonv2',
     addressdetails: '1',
     extratags: '1',
     limit: '40',
   });
-  // The policy also asks clients to identify themselves.
-  const res = await fetch(url, { headers: { 'User-Agent': 'JobLink/0.1 (https://github.com/Kiel9805/JobLink-Sample)' } });
-  if (!res.ok) throw new Error(`Nominatim request failed (${res.status})`);
-  return (await res.json()).map((r) => ({ ...r, tag }));
+  return results.map((r) => ({ ...r, tag }));
+}
+
+// City name at a point (for job searches), or null.
+export async function cityAt(lat, lng) {
+  const { address: a = {} } = await nominatim('/reverse', { lat, lon: lng, zoom: '10' });
+  return a.city ?? a.town ?? a.municipality ?? a.state ?? null;
 }
 
 function address(a = {}) {
@@ -83,7 +93,7 @@ export async function searchPlaces(tags, lat, lng, db = pool) {
   }
 
   const results = [];
-  for (const tag of tags) results.push(...await nominatim(tag, lat, lng)); // sequential: see throttle
+  for (const tag of tags) results.push(...await searchTag(tag, lat, lng)); // sequential: see throttle
 
   const kx = Math.cos((lat * Math.PI) / 180); // longitude degrees shrink away from the equator
   const byId = new Map();

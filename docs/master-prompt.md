@@ -45,6 +45,7 @@ README.md            setup + run steps
 |---|---|---|
 | `GEMINI_API_KEY` | server | Paid tier for real users (resumes are personal data) |
 | `GEMINI_MODEL` | server | Default `gemini-flash-lite-latest` (Flash with thinking took ~50 s per resume) |
+| `JOOBLE_API_KEY` | server | Optional. Live job openings; unset = companies only |
 | `DATABASE_URL` | server | Optional. Local Postgres or Neon/Supabase. Unset = no cache |
 | `PORT` | server | Default 3000 |
 
@@ -62,9 +63,19 @@ The map and search need no keys.
     "placeId": "node/123", "name": "...", "address": "...",
     "lat": 14.55, "lng": 121.02, "website": "https://..." ,
     "why": "Matches your Python + payments experience"
+  }],
+  "jobs": [{
+    "id": "123", "title": "...", "company": "...", "location": "...",
+    "salary": "...", "snippet": "plain text", "link": "https://jooble.org/..."
   }]
 }
 ```
+`jobs` is `[]` when `JOOBLE_API_KEY` is unset or Jooble fails. A Jooble failure never fails the request.
+
+## Jobs (Jooble)
+
+- `POST https://ph.jooble.org/api/<JOOBLE_API_KEY>` (keys are per country; register on ph.jooble.org) with `{ keywords: <first job title>, location: "<city>" }`. The city comes from a Nominatim reverse lookup that shares the throttle.
+- Strip HTML from Jooble fields on the server and cap at 20. Never log the URL, because it contains the key.
 → 400 `{ "error": "..." }` for bad input; 502 `{ "error": "..." }` when Gemini or Nominatim fails.
 
 ## Gemini
@@ -98,7 +109,7 @@ Modes: `driving`, `two-wheeler` (Motorcycle; very common in PH), `transit` (Comm
 
 ## Out of scope (do not build)
 
-Accounts/login, saved companies, job-listing APIs (later: **Jooble** or **Careerjet**, which cover PH; Adzuna does not), in-map route drawing, rate limiting (note it in README as required before public launch), deployment.
+Accounts/login, saved companies, more job sources (Careerjet; Adzuna doesn't cover PH), in-map route drawing, rate limiting (note it in README as required before public launch), deployment.
 
 ## Phases
 
