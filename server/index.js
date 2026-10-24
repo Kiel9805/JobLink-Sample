@@ -13,8 +13,6 @@ export const app = express();
 app.use(express.json({ limit: '7mb' }));
 app.use(express.static(fileURLToPath(new URL('../public', import.meta.url))));
 
-app.get('/api/config', (req, res) => res.json({ mapsBrowserKey: process.env.MAPS_BROWSER_KEY ?? '' }));
-
 app.post('/api/search', async (req, res) => {
   const { pdfBase64, lat, lng } = req.body ?? {};
   if (typeof pdfBase64 !== 'string' || !pdfBase64) return res.status(400).json({ error: 'pdfBase64 is required' });
@@ -34,14 +32,11 @@ app.post('/api/search', async (req, res) => {
   }
 
   try {
-    // Near-duplicate queries ("bank" / "Bank ") would each pay for a Places call.
-    const queries = [...new Map(profile.searchQueries.map((q) => [q.query.trim().toLowerCase(), q])).values()];
-    const lists = await Promise.all(queries.map(({ query, why }) =>
-      searchPlaces(query, lat, lng).then((cs) => cs.map((c) => ({ ...c, query, why })))));
-    const byId = new Map();
-    for (const c of lists.flat()) if (!byId.has(c.placeId)) byId.set(c.placeId, c);
+    const whyByTag = new Map(profile.searchQueries.map(({ tag, why }) => [tag, why]));
+    const places = await searchPlaces([...whyByTag.keys()], lat, lng);
+    const companies = places.map(({ tag, ...c }) => ({ ...c, why: whyByTag.get(tag) }));
     const { titles, skills, industries } = profile;
-    res.json({ profile: { titles, skills, industries }, companies: [...byId.values()] });
+    res.json({ profile: { titles, skills, industries }, companies });
   } catch (err) {
     console.error(err.message);
     res.status(502).json({ error: 'Could not search for companies' });

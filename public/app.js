@@ -9,8 +9,6 @@ const MODES = [
 
 let userLoc = MANILA;
 let map = null;
-let maps = null; // { Map, InfoWindow, Marker, LatLngBounds } once loaded
-let infoWindow = null;
 let userMarker = null;
 let markers = [];
 let companies = [];
@@ -26,9 +24,7 @@ function setStatus(text, isError = false) {
 function setLocation(loc, label) {
   userLoc = loc;
   $('location').textContent = `Searching near: ${label} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
-  if (!map) return;
-  if (userMarker) userMarker.setPosition(loc);
-  else userMarker = new maps.Marker({ map, position: loc, title: 'Your location', label: 'You' });
+  if (userMarker) userMarker.setLatLng(loc);
 }
 
 function showMapMessage(text) {
@@ -38,55 +34,22 @@ function showMapMessage(text) {
   $('map').replaceChildren(p);
 }
 
-// Official Maps JS dynamic-loader bootstrap, wrapped so the key comes from /api/config.
-function loadMapsBootstrap(key) {
-  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-    key,
-    v: 'weekly',
-  });
-}
-
-async function initMap() {
-  let key;
-  try {
-    const res = await fetch('/api/config');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    key = (await res.json()).mapsBrowserKey;
-  } catch {
-    key = null;
-  }
-  if (!key) {
-    showMapMessage('The map is unavailable (no Maps key configured). You can still search; results appear in the list.');
-    return;
-  }
-
-  // Google calls this global when the key is rejected (bad key, wrong referrer, API not enabled).
-  window.gm_authFailure = () => {
-    map = null;
-    showMapMessage('The map could not load: the Maps key was rejected. You can still search; results appear in the list.');
-  };
-
-  try {
-    loadMapsBootstrap(key);
-    const [{ Map, InfoWindow }, { Marker }, { LatLngBounds }] = await Promise.all([
-      google.maps.importLibrary('maps'),
-      google.maps.importLibrary('marker'),
-      google.maps.importLibrary('core'),
-    ]);
-    maps = { Map, InfoWindow, Marker, LatLngBounds };
-  } catch {
+function initMap() {
+  if (!window.L) {
     showMapMessage('The map could not load. You can still search; results appear in the list.');
     return;
   }
-
-  map = new maps.Map($('map'), { center: userLoc, zoom: 12, clickableIcons: false });
-  infoWindow = new maps.InfoWindow();
-  map.addListener('click', (e) => {
+  map = L.map('map').setView(userLoc, 12);
+  // shortcut: OSM's public tiles are for light use only; switch to a tile provider before a public launch.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  map.on('click', (e) => {
     userPicked = true;
-    setLocation(e.latLng.toJSON(), 'map point you picked');
+    setLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, 'map point you picked');
   });
-  userMarker = new maps.Marker({ map, position: userLoc, title: 'Your location', label: 'You' });
-  if (markers.length === 0 && companies.length) renderMarkers();
+  userMarker = L.circleMarker(userLoc, { radius: 8, color: '#b91c1c' }).addTo(map).bindTooltip('You');
 }
 
 function initLocation() {
@@ -97,7 +60,7 @@ function initLocation() {
       if (userPicked) return;
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setLocation(loc, 'your current location');
-      if (map) map.setCenter(loc);
+      if (map) map.setView(loc);
     },
     fallback,
     { timeout: 10000 },
@@ -127,7 +90,6 @@ function directionsUrl(c, mode) {
   u.search = new URLSearchParams({
     api: '1',
     destination: `${c.lat},${c.lng}`,
-    destination_place_id: c.placeId,
     travelmode: mode,
   });
   return u.href;
@@ -152,7 +114,6 @@ function companyDetails(c) {
   const box = el('div', null, 'company');
   box.append(el('h3', c.name));
   if (c.address) box.append(el('p', c.address));
-  if (typeof c.rating === 'number') box.append(el('p', `Rating: ${c.rating} / 5`));
   const site = safeHttpUrl(c.website);
   if (site) {
     const p = el('p');
@@ -172,27 +133,17 @@ function companyDetails(c) {
 // Details always go in the sidebar too, so keyboard and screen-reader users never depend on the map popup.
 function showCompany(i) {
   $('details').replaceChildren(companyDetails(companies[i]));
-  if (map && markers[i]) {
-    infoWindow.setContent(companyDetails(companies[i]));
-    infoWindow.open({ map, anchor: markers[i] });
-  }
+  markers[i]?.openPopup();
 }
 
 function renderMarkers() {
-  markers.forEach((m) => m.setMap(null));
+  markers.forEach((m) => m.remove());
   markers = [];
-  if (!map) return;
-  infoWindow.close();
-  if (!companies.length) return;
-  const bounds = new maps.LatLngBounds();
-  bounds.extend(userLoc);
-  companies.forEach((c, i) => {
-    const marker = new maps.Marker({ map, position: { lat: c.lat, lng: c.lng }, title: c.name });
-    marker.addListener('click', () => showCompany(i));
-    markers.push(marker);
-    bounds.extend({ lat: c.lat, lng: c.lng });
-  });
-  map.fitBounds(bounds);
+  if (!map || !companies.length) return;
+  markers = companies.map((c) => L.marker(c, { title: c.name, alt: c.name })
+    .addTo(map)
+    .bindPopup(() => companyDetails(c)));
+  map.fitBounds(L.latLngBounds([userLoc, ...companies]), { padding: [24, 24] });
 }
 
 function renderResults(data) {
@@ -247,5 +198,5 @@ async function onSubmit(e) {
 }
 
 $('search-form').addEventListener('submit', onSubmit);
-initLocation();
 initMap();
+initLocation();
