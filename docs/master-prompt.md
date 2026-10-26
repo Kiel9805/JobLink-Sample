@@ -72,6 +72,13 @@ The map and search need no keys.
 ```
 `jobs` is `[]` when `JOOBLE_API_KEY` is unset or Jooble fails. A Jooble failure never fails the request.
 
+## Feed (sidebar tab)
+
+`GET /api/feed?lat=..&lng=..&title=..` → `{ city, title, jobs: [...same shape + posted], news: [{ title, link, source, published }] }`
+- Openings: Jooble with `datecreatedfrom` = 3 days ago, `ResultOnPage: 30`, keywords = the user's top job title (or empty), newest first; cached 15 min per rounded area + title.
+- News: RSS from Manila Times, BusinessWorld, Inquirer, Philstar, GMA and Rappler, kept only when the **headline** names jobs or hiring; re-read at most every 30 min, stored in `news_items` for 30 days. Show headline, source, date and link only.
+- 60 feed loads per IP per hour. Either half failing still returns the other.
+
 ## Jobs (Jooble)
 
 - `POST https://ph.jooble.org/api/<JOOBLE_API_KEY>` (keys are per country; register on ph.jooble.org) with `{ keywords: <first job title>, location: "<city>" }`. The city comes from a Nominatim reverse lookup that shares the throttle.

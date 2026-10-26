@@ -23,83 +23,104 @@
         <p class="region">Philippines</p>
       </header>
 
-      <div class="intro-copy">
-        <h1>Find work that fits your resume, close to home.</h1>
-        <p>Upload your resume. We match your skills to live job openings and companies near you.</p>
+      <div id="view-switch" class="view-switch" role="tablist" aria-label="Sidebar">
+        <button type="button" role="tab" id="tab-search" aria-controls="view-search" aria-selected="true">Search</button>
+        <button type="button" role="tab" id="tab-feed" aria-controls="view-feed" aria-selected="false" tabindex="-1">Feed</button>
       </div>
 
-      <form id="search-form" class="search" novalidate>
-        <label class="eyebrow" for="resume">Resume</label>
-        <div class="dropzone" id="dropzone">
-          <input id="resume" name="resume" type="file" accept="application/pdf" required aria-describedby="file-hint">
-          <div class="doc" aria-hidden="true"></div>
-          <div class="dropzone-text">
-            <p id="file-name" class="file-name">Drop your resume here</p>
-            <p id="file-hint" class="file-hint">or click to browse. PDF up to 5 MB.</p>
+      <div id="view-search" class="view" role="tabpanel" aria-labelledby="tab-search">
+        <div class="intro-copy">
+          <h1>Find work that fits your resume, close to home.</h1>
+          <p>Upload your resume. We match your skills to live job openings and companies near you.</p>
+        </div>
+
+        <form id="search-form" class="search" novalidate>
+          <label class="eyebrow" for="resume">Resume</label>
+          <div class="dropzone" id="dropzone">
+            <input id="resume" name="resume" type="file" accept="application/pdf" required aria-describedby="file-hint">
+            <div class="doc" aria-hidden="true"></div>
+            <div class="dropzone-text">
+              <p id="file-name" class="file-name">Drop your resume here</p>
+              <p id="file-hint" class="file-hint">or click to browse. PDF up to 5 MB.</p>
+            </div>
+          </div>
+          <button type="submit" id="search-btn" class="btn-primary">Find jobs and companies</button>
+          <div class="progress" aria-hidden="true"></div>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <section class="area">
+          <label class="eyebrow" for="area-select">Search area</label>
+          <!-- Values are "lat,lng"; "current" asks the browser, "map" is set by clicking the map. -->
+          <div class="select">
+            <select id="area-select">
+              <option value="current" selected>Current location</option>
+              <option value="map" hidden>Point picked on the map</option>
+              <optgroup label="Metro Manila">
+                <option value="14.5995,120.9842">Manila</option>
+                <option value="14.5547,121.0244">Makati</option>
+                <option value="14.5509,121.0503">Taguig (BGC)</option>
+                <option value="14.6760,121.0437">Quezon City</option>
+                <option value="14.5866,121.0614">Pasig (Ortigas)</option>
+                <option value="14.5794,121.0359">Mandaluyong</option>
+                <option value="14.5378,121.0014">Pasay</option>
+                <option value="14.4793,121.0198">Parañaque</option>
+                <option value="14.4195,121.0391">Muntinlupa (Alabang)</option>
+              </optgroup>
+              <optgroup label="Luzon">
+                <option value="16.4023,120.5960">Baguio</option>
+                <option value="15.1450,120.5887">Angeles</option>
+                <option value="13.7565,121.0583">Batangas City</option>
+                <option value="14.2117,121.1653">Calamba</option>
+                <option value="14.3122,121.1114">Santa Rosa, Laguna</option>
+              </optgroup>
+              <optgroup label="Visayas">
+                <option value="10.3157,123.8854">Cebu City</option>
+                <option value="10.3236,123.9223">Mandaue</option>
+                <option value="10.3103,123.9494">Lapu-Lapu</option>
+                <option value="10.7202,122.5621">Iloilo City</option>
+                <option value="10.6765,122.9509">Bacolod</option>
+                <option value="11.2445,125.0036">Tacloban</option>
+              </optgroup>
+              <optgroup label="Mindanao">
+                <option value="7.1907,125.4553">Davao City</option>
+                <option value="8.4542,124.6319">Cagayan de Oro</option>
+                <option value="6.1164,125.1716">General Santos</option>
+                <option value="6.9214,122.0790">Zamboanga City</option>
+              </optgroup>
+            </select>
+          </div>
+          <p id="location" class="location" aria-live="polite">Getting your location...</p>
+          <p class="hint">Or click anywhere on the map to search around that point.</p>
+        </section>
+
+        <section id="profile" class="profile" aria-labelledby="profile-label" hidden>
+          <p id="profile-label" class="eyebrow">From your resume</p>
+          <h2 class="sub">Job titles</h2>
+          <ul id="profile-titles" class="tags tags-accent"></ul>
+          <h2 class="sub">Skills</h2>
+          <ul id="profile-skills" class="tags"></ul>
+        </section>
+      </div>
+
+      <div id="view-feed" class="view" role="tabpanel" aria-labelledby="tab-feed" hidden>
+        <div class="feed-head">
+          <h2>Latest near <span id="feed-city">you</span></h2>
+          <p id="feed-context" class="hint">New openings from the last 3 days, plus hiring news from Philippine outlets.</p>
+          <div class="chips" role="group" aria-label="Show">
+            <button type="button" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" data-filter="job" aria-pressed="false">Openings</button>
+            <button type="button" data-filter="news" aria-pressed="false">News</button>
           </div>
         </div>
-        <button type="submit" id="search-btn" class="btn-primary">Find jobs and companies</button>
-        <div class="progress" aria-hidden="true"></div>
-      </form>
-
-      <p id="status" class="status" role="status" aria-live="polite"></p>
-
-      <section class="area">
-        <label class="eyebrow" for="area-select">Search area</label>
-        <!-- Values are "lat,lng"; "current" asks the browser, "map" is set by clicking the map. -->
-        <div class="select">
-          <select id="area-select">
-            <option value="current" selected>Current location</option>
-            <option value="map" hidden>Point picked on the map</option>
-            <optgroup label="Metro Manila">
-              <option value="14.5995,120.9842">Manila</option>
-              <option value="14.5547,121.0244">Makati</option>
-              <option value="14.5509,121.0503">Taguig (BGC)</option>
-              <option value="14.6760,121.0437">Quezon City</option>
-              <option value="14.5866,121.0614">Pasig (Ortigas)</option>
-              <option value="14.5794,121.0359">Mandaluyong</option>
-              <option value="14.5378,121.0014">Pasay</option>
-              <option value="14.4793,121.0198">Parañaque</option>
-              <option value="14.4195,121.0391">Muntinlupa (Alabang)</option>
-            </optgroup>
-            <optgroup label="Luzon">
-              <option value="16.4023,120.5960">Baguio</option>
-              <option value="15.1450,120.5887">Angeles</option>
-              <option value="13.7565,121.0583">Batangas City</option>
-              <option value="14.2117,121.1653">Calamba</option>
-              <option value="14.3122,121.1114">Santa Rosa, Laguna</option>
-            </optgroup>
-            <optgroup label="Visayas">
-              <option value="10.3157,123.8854">Cebu City</option>
-              <option value="10.3236,123.9223">Mandaue</option>
-              <option value="10.3103,123.9494">Lapu-Lapu</option>
-              <option value="10.7202,122.5621">Iloilo City</option>
-              <option value="10.6765,122.9509">Bacolod</option>
-              <option value="11.2445,125.0036">Tacloban</option>
-            </optgroup>
-            <optgroup label="Mindanao">
-              <option value="7.1907,125.4553">Davao City</option>
-              <option value="8.4542,124.6319">Cagayan de Oro</option>
-              <option value="6.1164,125.1716">General Santos</option>
-              <option value="6.9214,122.0790">Zamboanga City</option>
-            </optgroup>
-          </select>
-        </div>
-        <p id="location" class="location" aria-live="polite">Getting your location...</p>
-        <p class="hint">Or click anywhere on the map to search around that point.</p>
-      </section>
-
-      <section id="profile" class="profile" aria-labelledby="profile-label" hidden>
-        <p id="profile-label" class="eyebrow">From your resume</p>
-        <h2 class="sub">Job titles</h2>
-        <ul id="profile-titles" class="tags tags-accent"></ul>
-        <h2 class="sub">Skills</h2>
-        <ul id="profile-skills" class="tags"></ul>
-      </section>
+        <p id="feed-status" class="status" role="status" aria-live="polite"></p>
+        <ul id="feed" class="feed"></ul>
+      </div>
 
       <footer class="sidebar-foot">
         <p><strong>Privacy.</strong> Your resume is sent to Google's Gemini AI to read your job titles and skills, then discarded. JobLink never saves it.</p>
-        <p class="credits">Jobs by Jooble. Map data &copy; OpenStreetMap contributors. Routes by FOSSGIS OSRM.</p>
+        <p class="credits">Jobs by Jooble. News headlines link to their publishers. Map data &copy; OpenStreetMap contributors. Routes by FOSSGIS OSRM.</p>
       </footer>
     </aside>
 

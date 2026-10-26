@@ -22,6 +22,12 @@ let active = -1; // index of the selected company
 let routeLayer = null;
 let routeRequest = 0; // answers to superseded route requests are ignored
 let userPicked = false; // a map click wins over a late geolocation answer
+let topTitle = ''; // first job title from the last resume search; narrows the feed's openings
+let feedItems = [];
+let feedFilter = 'all';
+let feedKey = ''; // area + title the feed was loaded for
+let feedLoadedAt = 0;
+let feedRequest = 0; // answers to superseded feed requests are ignored
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,6 +55,7 @@ function setLocation(loc, label) {
   userLoc = loc;
   $('location').replaceChildren(el('span', label, 'loc-name'), el('span', `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`, 'loc-coords'));
   if (userMarker) userMarker.setLatLng(loc);
+  if (!$('view-feed').hidden) loadFeed();
 }
 
 function showMapMessage(text) {
@@ -344,6 +351,7 @@ function renderCompanies() {
 
 function renderResults(data) {
   const profile = data.profile || {};
+  topTitle = profile.titles?.[0] ?? '';
   renderTags('profile-titles', profile.titles || []);
   renderTags('profile-skills', profile.skills || []);
   $('profile').hidden = false;
@@ -395,7 +403,108 @@ async function onSubmit(e) {
   }
 }
 
+/* ---------- Feed ---------- */
+
+const FEED_STALE_MS = 10 * 60 * 1000;
+
+function timeAgo(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const min = Math.round((Date.now() - t) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.round(min / 60)} h ago`;
+  const days = Math.round(min / (24 * 60));
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+function selectView(name, focus = false) {
+  for (const v of ['search', 'feed']) {
+    const on = v === name;
+    const tab = $(`tab-${v}`);
+    tab.setAttribute('aria-selected', String(on));
+    tab.tabIndex = on ? 0 : -1;
+    $(`view-${v}`).hidden = !on;
+    if (on && focus) tab.focus();
+  }
+  if (name === 'feed') loadFeed();
+}
+
+async function loadFeed() {
+  const key = `${userLoc.lat.toFixed(2)},${userLoc.lng.toFixed(2)}|${topTitle}`;
+  if (key === feedKey && Date.now() - feedLoadedAt < FEED_STALE_MS) return;
+  const req = ++feedRequest;
+  feedKey = key;
+  $('feed-status').classList.remove('error');
+  $('feed-status').textContent = 'Loading the latest openings and news...';
+  $('feed-context').textContent = topTitle
+    ? `New "${topTitle}" openings from the last 3 days, plus hiring news from Philippine outlets.`
+    : 'New openings from the last 3 days, plus hiring news from Philippine outlets. Search with your resume to match openings to your job title.';
+  try {
+    const params = new URLSearchParams({ lat: userLoc.lat, lng: userLoc.lng });
+    if (topTitle) params.set('title', topTitle);
+    const res = await fetch(`/api/feed?${params}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Could not load the feed (HTTP ${res.status}).`);
+    if (req !== feedRequest) return;
+    feedLoadedAt = Date.now();
+    $('feed-city').textContent = data.city || 'your area';
+    feedItems = [
+      ...(data.jobs || []).map((j) => ({ kind: 'job', time: j.posted, ...j })),
+      ...(data.news || []).map((n) => ({ kind: 'news', time: n.published, ...n })),
+    ].sort((a, b) => (Date.parse(b.time) || 0) - (Date.parse(a.time) || 0));
+    $('feed-status').textContent = '';
+    renderFeed();
+  } catch (err) {
+    if (req !== feedRequest) return;
+    feedKey = ''; // let the next open retry
+    $('feed-status').classList.add('error');
+    $('feed-status').textContent = err.message || 'Could not load the feed.';
+  }
+}
+
+function feedCard(item) {
+  const li = el('li', null, `feed-card is-${item.kind}`);
+  const meta = el('p', null, 'feed-meta');
+  meta.append(el('span', item.kind === 'job' ? 'New opening' : 'News', 'feed-kind'), el('span', timeAgo(item.time), 'feed-time'));
+  li.append(meta);
+  const href = safeHttpUrl(item.link);
+  li.append(href ? link(href, item.title, 'feed-title') : el('p', item.title, 'feed-title'));
+  const sub = el('p', null, 'feed-sub');
+  for (const part of item.kind === 'job' ? [item.company, item.location] : [item.source]) if (part) sub.append(el('span', part));
+  if (sub.childNodes.length) li.append(sub);
+  if (item.kind === 'job' && item.salary) li.append(el('p', item.salary, 'job-salary'));
+  return li;
+}
+
+function renderFeed() {
+  const items = feedItems.filter((i) => feedFilter === 'all' || i.kind === feedFilter);
+  if (!items.length) {
+    const empty = {
+      all: 'Nothing new right now. Try another search area.',
+      job: 'No openings from the last 3 days in this area. Try another search area.',
+      news: 'No hiring news in the last 30 days yet. Headlines build up as Philippine outlets publish them.',
+    }[feedFilter];
+    $('feed').replaceChildren(el('li', empty, 'empty'));
+    return;
+  }
+  $('feed').replaceChildren(...items.map(feedCard));
+}
+
 /* ---------- Wiring ---------- */
+
+for (const v of ['search', 'feed']) $(`tab-${v}`).addEventListener('click', () => selectView(v));
+$('view-switch').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  selectView($('tab-search').getAttribute('aria-selected') === 'true' ? 'feed' : 'search', true);
+});
+for (const chip of document.querySelectorAll('.chips button')) {
+  chip.addEventListener('click', () => {
+    feedFilter = chip.dataset.filter;
+    for (const c of document.querySelectorAll('.chips button')) c.setAttribute('aria-pressed', String(c === chip));
+    renderFeed();
+  });
+}
 
 $('search-form').addEventListener('submit', onSubmit);
 $('resume').addEventListener('change', showFile);

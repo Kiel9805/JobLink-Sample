@@ -91,3 +91,34 @@ test('POST /api/search allows 10 valid searches per IP per hour, then 429 JSON',
   assert.equal((await post({}, '203.0.113.7')).status, 400); // invalid input is still answered, and isn't counted
   assert.equal((await post(body, '203.0.113.8')).status, 200); // other visitors are unaffected
 });
+
+const getFeed = (query) => realFetch(`${base}/api/feed?${new URLSearchParams(query)}`, { headers: { 'X-Forwarded-For': '198.51.100.50' } });
+
+test('GET /api/feed rejects coordinates outside the Philippines', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', upstream);
+  for (const q of [{}, { lat: 'abc', lng: '121' }, { lat: '35.6', lng: '139.7' }]) assert.equal((await getFeed(q)).status, 400);
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('GET /api/feed returns new openings and news, and caches openings per area and title', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', upstream);
+  const res = await getFeed({ lat: '14.5547', lng: '121.0244', title: 'Dev' });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.city, 'Makati');
+  assert.equal(body.title, 'Dev');
+  assert.deepEqual(body.jobs.map((j) => j.title), ['Dev']);
+  assert.ok(Array.isArray(body.news));
+  const joobleCalls = () => fetchMock.mock.calls.filter((c) => String(c.arguments[0]).includes('jooble')).length;
+  assert.equal(joobleCalls(), 1);
+  await getFeed({ lat: '14.5549', lng: '121.0241', title: 'dev' }); // same area after rounding, same title
+  assert.equal(joobleCalls(), 1);
+});
+
+test('GET /api/feed still answers when Jooble fails', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => String(url).includes('jooble') ? new Response('', { status: 500 }) : upstream(url));
+  const res = await getFeed({ lat: '10.3157', lng: '123.8854' });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).jobs, []);
+});

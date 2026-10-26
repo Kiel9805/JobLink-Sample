@@ -32,7 +32,9 @@ External APIs are mocked. The Postgres test runs only when `DATABASE_URL` is set
 - `server/index.js`: Express route `POST /api/search` and static files
 - `server/gemini.js`: resume PDF → profile JSON with OSM categories
 - `server/places.js`: category allowlist + Nominatim search with a 30-day Postgres cache
-- `server/jobs.js`: Jooble openings for the top job title in the nearest city
+- `server/jobs.js`: Jooble openings for the top job title in the nearest city, and the newest openings for the feed
+- `server/news.js`: job-related headlines from Philippine news RSS feeds, refreshed every 30 minutes and kept 30 days in Postgres
+- `GET /api/feed`: the sidebar's Feed tab (newest openings near the search area + hiring news)
 - `public/`: the page (plain HTML/JS/CSS + Leaflet, no build step)
 - `docs/master-prompt.md`: the build spec; `.claude/agents/`: the sub-agents that built it
 
@@ -44,6 +46,7 @@ Resumes are sent to Gemini and never stored or logged. Use Gemini's **paid tier*
 
 - **Rate limit:** 10 searches per IP per hour, kept in memory (resets on restart, not shared across instances). When hosted behind a proxy, set `TRUST_PROXY=1`.
 - **Free OSM services are for light use.** Nominatim allows 1 request/second (the server enforces this, so each search takes a few seconds and searches queue under load). The public map tiles are also for light use. For real traffic, switch to a hosted provider (e.g. LocationIQ, Geoapify, MapTiler) or self-host.
+- **Feed news is thin.** Only headlines that name jobs or hiring are kept, which is a few per day across 10 feeds (Manila Times, BusinessWorld, Inquirer, Philstar, GMA, Rappler). Only headline, source, date and link are shown. Manila Bulletin blocks bots and PNA has no feed. Feed loads are limited to 60 per IP per hour.
 - **In-app routes** come from FOSSGIS's public OSRM servers (routing.openstreetmap.de), called from the browser. They cover driving and walking only, with no traffic, and are meant for light use. Commute and motorcycle stay as Google Maps links.
 - **OSM coverage varies.** Many PH businesses are missing or untagged, and there are no ratings.
 - Old cache rows (over 30 days) are ignored but never deleted.
