@@ -68,7 +68,8 @@ function initMap() {
   }).addTo(map);
   map.on('click', (e) => {
     userPicked = true;
-    setLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, 'Point you picked on the map');
+    $('area-select').value = 'map';
+    setLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, 'Point picked on the map');
   });
   userMarker = L.marker(userLoc, {
     icon: L.divIcon({ className: 'pin-you', iconSize: [18, 18] }),
@@ -77,19 +78,37 @@ function initMap() {
   }).addTo(map).bindTooltip('Search area', { direction: 'top', offset: [0, -10] });
 }
 
-function initLocation() {
-  const fallback = () => userPicked || setLocation(MANILA, 'Metro Manila (default)');
+function useCurrentLocation() {
+  userPicked = false;
+  $('location').textContent = 'Getting your location...';
+  // Without location access, fall back to Manila and say so in the dropdown and the label.
+  const fallback = () => {
+    if (userPicked) return;
+    $('area-select').value = '14.5995,120.9842';
+    setLocation(MANILA, 'Manila (your location is unavailable)');
+    if (map) map.setView(MANILA, 12);
+  };
   if (!navigator.geolocation) return fallback();
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       if (userPicked) return;
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setLocation(loc, 'Your current location');
-      if (map) map.setView(loc);
+      if (map) map.setView(loc, 13);
     },
     fallback,
-    { timeout: 10000 },
+    { enableHighAccuracy: true, timeout: 10000 },
   );
+}
+
+function onAreaChange() {
+  const select = $('area-select');
+  if (select.value === 'current') return useCurrentLocation();
+  if (select.value === 'map') return;
+  userPicked = true; // a late geolocation answer must not override a chosen city
+  const [lat, lng] = select.value.split(',').map(Number);
+  setLocation({ lat, lng }, select.selectedOptions[0].textContent);
+  if (map) map.setView([lat, lng], 13);
 }
 
 /* ---------- Upload ---------- */
@@ -389,5 +408,7 @@ $('result-tabs').addEventListener('keydown', (e) => {
   selectTab($('tab-jobs').getAttribute('aria-selected') === 'true' ? 'companies' : 'jobs', true);
 });
 
+$('area-select').addEventListener('change', onAreaChange);
+
 initMap();
-initLocation();
+useCurrentLocation();
