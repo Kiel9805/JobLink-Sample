@@ -2,7 +2,7 @@
 
 Upload a resume, and JobLink finds job openings and companies near you in the Philippines that fit it, on a map with one-click directions (drive, motorcycle, commute, walk).
 
-Resume → Gemini (job titles, skills, workplace categories) → Jooble (openings for the top title) + OpenStreetMap search (Nominatim) → list + map markers → Google Maps directions.
+Resume → Gemini (job titles, skills, workplace categories) → Jooble (openings for the top title) + OpenStreetMap search (Nominatim) → list + map markers → drive/walk routes drawn on the map (free OSM routing) or Google Maps navigation links.
 
 ## Setup
 
@@ -44,6 +44,7 @@ Resumes are sent to Gemini and never stored or logged. Use Gemini's **paid tier*
 
 - **Rate limit:** 10 searches per IP per hour, kept in memory (resets on restart, not shared across instances). When hosted behind a proxy, set `TRUST_PROXY=1`.
 - **Free OSM services are for light use.** Nominatim allows 1 request/second (the server enforces this, so each search takes a few seconds and searches queue under load). The public map tiles are also for light use. For real traffic, switch to a hosted provider (e.g. LocationIQ, Geoapify, MapTiler) or self-host.
+- **In-app routes** come from FOSSGIS's public OSRM servers (routing.openstreetmap.de), called from the browser. They cover driving and walking only, with no traffic, and are meant for light use. Commute and motorcycle stay as Google Maps links.
 - **OSM coverage varies.** Many PH businesses are missing or untagged, and there are no ratings.
 - Old cache rows (over 30 days) are ignored but never deleted.
 - Job openings come from Jooble for the **top job title only**, in the nearest city. They have no map coordinates, so they appear in the list, not as markers. They aren't cached.

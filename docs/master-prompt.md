@@ -95,7 +95,8 @@ The map and search need no keys.
 
 ## Directions
 
-Use Google Maps URLs (free, no key):
+- **Route on map (Drive, Walk):** the browser calls FOSSGIS's free OSRM servers, `https://routing.openstreetmap.de/{routed-car|routed-foot}/route/v1/{driving|foot}/LNG,LAT;LNG,LAT?overview=full&geometries=geojson`, draws the line with Leaflet, and shows distance and time (driving: "without traffic"). Google's Directions API isn't an option: its terms only allow routes on a Google map.
+- **Navigate in Google Maps** (free, no key):
 `https://www.google.com/maps/dir/?api=1&destination=LAT,LNG&travelmode=MODE`
 Modes: `driving`, `two-wheeler` (Motorcycle; very common in PH), `transit` (Commute), `walking`.
 

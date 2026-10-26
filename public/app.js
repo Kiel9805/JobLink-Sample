@@ -6,6 +6,12 @@ const MODES = [
   ['Commute', 'transit'],
   ['Walk', 'walking'],
 ];
+// In-app routes from FOSSGIS's free OSRM servers (the ones openstreetmap.org uses): [label, server profile, OSRM mode].
+// shortcut: public servers are for light use and have no traffic or transit data; use a hosted router for real traffic.
+const ROUTES = [
+  ['Drive', 'routed-car', 'driving'],
+  ['Walk', 'routed-foot', 'foot'],
+];
 
 let userLoc = MANILA;
 let map = null;
@@ -13,6 +19,8 @@ let userMarker = null;
 let markers = [];
 let companies = [];
 let active = -1; // index of the selected company
+let routeLayer = null;
+let routeRequest = 0; // answers to superseded route requests are ignored
 let userPicked = false; // a map click wins over a late geolocation answer
 
 const $ = (id) => document.getElementById(id);
@@ -121,6 +129,54 @@ function directionsUrl(c, mode) {
   return u.href;
 }
 
+function clearRoute() {
+  routeRequest++;
+  routeLayer?.remove();
+  routeLayer = null;
+}
+
+function formatDuration(seconds) {
+  const min = Math.max(1, Math.round(seconds / 60));
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+
+async function showRoute(c, [label, profile, mode], button, out) {
+  const req = ++routeRequest;
+  for (const b of button.parentNode.children) b.setAttribute('aria-pressed', String(b === button));
+  out.classList.remove('error');
+  out.textContent = 'Finding a route...';
+  try {
+    const res = await fetch(`https://routing.openstreetmap.de/${profile}/route/v1/${mode}/${userLoc.lng},${userLoc.lat};${c.lng},${c.lat}?overview=full&geometries=geojson`);
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!res.ok || data.code !== 'Ok' || !route) throw new Error('no route');
+    if (req !== routeRequest) return;
+    const line = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    routeLayer?.remove();
+    if (map) {
+      // A dark casing under the line keeps it readable over busy streets; walking routes are dashed.
+      routeLayer = L.layerGroup([
+        L.polyline(line, { color: '#0b0e12', weight: 9, opacity: 0.85, interactive: false }),
+        L.polyline(line, {
+          color: label === 'Walk' ? '#e8ebf0' : '#f5b72e',
+          weight: 5,
+          lineCap: 'square',
+          dashArray: label === 'Walk' ? '10 8' : null,
+          interactive: false,
+          attribution: 'Routes &copy; <a href="https://routing.openstreetmap.de/">FOSSGIS OSRM</a>',
+        }),
+      ]).addTo(map);
+      map.fitBounds(L.latLngBounds(line), { padding: [48, 48] });
+      map.getContainer().scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    out.textContent = `${label} from your search area: ${(route.distance / 1000).toFixed(1)} km, about ${formatDuration(route.duration)}${label === 'Drive' ? ' without traffic' : ''}.`;
+  } catch {
+    if (req !== routeRequest) return;
+    out.classList.add('error');
+    out.textContent = 'Could not find a route. Try the Google Maps links below.';
+  }
+}
+
 // withHead adds the name and address, which the list row already shows but the map popup needs.
 function companyDetails(c, withHead) {
   const box = el('div', null, 'detail');
@@ -141,11 +197,24 @@ function companyDetails(c, withHead) {
     p.append(link(site, 'Visit website'));
     box.append(p);
   }
+  const routes = el('div', null, 'directions');
+  const routeGrid = el('div', null, 'dir-grid route-grid');
+  const out = el('p', null, 'route-result');
+  out.setAttribute('aria-live', 'polite');
+  for (const route of ROUTES) {
+    const b = el('button', route[0]);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => showRoute(c, route, b, out));
+    routeGrid.append(b);
+  }
+  routes.append(el('span', 'Route on map', 'eyebrow'), routeGrid, out);
+
   const dirs = el('div', null, 'directions');
   const grid = el('div', null, 'dir-grid');
   for (const [label, mode] of MODES) grid.append(link(directionsUrl(c, mode), label));
-  dirs.append(el('span', 'Directions', 'eyebrow'), grid);
-  box.append(dirs);
+  dirs.append(el('span', 'Navigate in Google Maps', 'eyebrow'), grid);
+  box.append(routes, dirs);
   return box;
 }
 
@@ -163,6 +232,7 @@ function selectTab(name, focus = false) {
 // Expands the company in the list and highlights its marker. fromMap: the marker was clicked, so its popup is already opening.
 function showCompany(i, fromMap = false) {
   if (active >= 0 && active !== i) {
+    clearRoute();
     const prev = $(`company-${active}`);
     prev?.classList.remove('is-active');
     prev?.querySelector('.company-row').setAttribute('aria-expanded', 'false');
@@ -262,6 +332,7 @@ function renderResults(data) {
   const jobs = Array.isArray(data.jobs) ? data.jobs : [];
   companies = Array.isArray(data.companies) ? data.companies : [];
   active = -1;
+  clearRoute();
   renderJobs(jobs);
   renderCompanies();
   renderMarkers();
