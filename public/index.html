@@ -3,42 +3,92 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0e12">
   <title>JobLink</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="style.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
-  <header>
-    <h1>JobLink</h1>
-    <p>Upload your resume to find companies near you that fit your experience.</p>
-  </header>
+  <div class="app">
+    <aside class="sidebar" aria-label="Search">
+      <header class="brand">
+        <div class="logo" aria-hidden="true"><span></span><span></span></div>
+        <p class="wordmark">Job<span>Link</span></p>
+        <p class="region">Philippines</p>
+      </header>
 
-  <form id="search-form">
-    <label for="resume">Resume (PDF, max 5 MB)</label>
-    <input id="resume" name="resume" type="file" accept="application/pdf" required>
-    <button type="submit" id="search-btn">Find companies</button>
-    <p class="privacy">Privacy: your resume is sent to Google's Gemini AI to read your job titles and skills, then discarded. JobLink never saves it.</p>
-  </form>
+      <div class="intro-copy">
+        <h1>Find work that fits your resume, close to home.</h1>
+        <p>Upload your resume. We match your skills to live job openings and companies near you.</p>
+      </div>
 
-  <p id="location" aria-live="polite">Getting your location…</p>
-  <p id="status" role="status" aria-live="polite"></p>
+      <form id="search-form" class="search" novalidate>
+        <label class="eyebrow" for="resume">Resume</label>
+        <div class="dropzone" id="dropzone">
+          <input id="resume" name="resume" type="file" accept="application/pdf" required aria-describedby="file-hint">
+          <div class="doc" aria-hidden="true"></div>
+          <div class="dropzone-text">
+            <p id="file-name" class="file-name">Drop your resume here</p>
+            <p id="file-hint" class="file-hint">or click to browse. PDF up to 5 MB.</p>
+          </div>
+        </div>
+        <button type="submit" id="search-btn" class="btn-primary">Find jobs and companies</button>
+        <div class="progress" aria-hidden="true"></div>
+      </form>
 
-  <main>
-    <div id="map" role="region" aria-label="Map of matching companies"></div>
-    <aside>
-      <section id="profile" hidden>
-        <h2>Your profile</h2>
-        <p><strong>Titles:</strong> <span id="profile-titles"></span></p>
-        <p><strong>Skills:</strong> <span id="profile-skills"></span></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <section class="area" aria-labelledby="area-label">
+        <p id="area-label" class="eyebrow">Search area</p>
+        <p id="location" class="location" aria-live="polite">Getting your location...</p>
+        <p class="hint">Click anywhere on the map to search a different area.</p>
       </section>
-      <h2 id="jobs-heading" hidden>Job openings</h2>
-      <ul id="jobs" aria-labelledby="jobs-heading"></ul>
-      <h2 id="results-heading" hidden>Companies near you</h2>
-      <ul id="results" aria-labelledby="results-heading"></ul>
-      <div id="details" aria-live="polite"></div>
+
+      <section id="profile" class="profile" aria-labelledby="profile-label" hidden>
+        <p id="profile-label" class="eyebrow">From your resume</p>
+        <h2 class="sub">Job titles</h2>
+        <ul id="profile-titles" class="tags tags-accent"></ul>
+        <h2 class="sub">Skills</h2>
+        <ul id="profile-skills" class="tags"></ul>
+      </section>
+
+      <footer class="sidebar-foot">
+        <p><strong>Privacy.</strong> Your resume is sent to Google's Gemini AI to read your job titles and skills, then discarded. JobLink never saves it.</p>
+        <p class="credits">Jobs by Jooble. Map data &copy; OpenStreetMap contributors.</p>
+      </footer>
     </aside>
-  </main>
+
+    <main class="main">
+      <div id="map" role="region" aria-label="Map of matching companies"></div>
+
+      <section class="results" aria-label="Results">
+        <div id="welcome" class="welcome">
+          <p class="eyebrow">How it works</p>
+          <ol class="steps">
+            <li><span class="step-num">01</span><div><h2>Upload your resume</h2><p>A PDF from Word, Google Docs or Canva works.</p></div></li>
+            <li><span class="step-num">02</span><div><h2>We read your experience</h2><p>AI picks out your job titles, skills and the kinds of workplaces that fit.</p></div></li>
+            <li><span class="step-num">03</span><div><h2>See matches near you</h2><p>Live job openings in your city, plus companies on the map with directions.</p></div></li>
+          </ol>
+        </div>
+
+        <div id="result-tabs" class="tabs" role="tablist" aria-label="Results" hidden>
+          <button type="button" role="tab" id="tab-jobs" aria-controls="panel-jobs" aria-selected="true">Job openings <span id="jobs-count" class="count">0</span></button>
+          <button type="button" role="tab" id="tab-companies" aria-controls="panel-companies" aria-selected="false" tabindex="-1">Companies <span id="companies-count" class="count">0</span></button>
+        </div>
+        <div id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs" hidden>
+          <ul id="jobs" class="list"></ul>
+        </div>
+        <div id="panel-companies" role="tabpanel" aria-labelledby="tab-companies" hidden>
+          <ul id="results" class="list"></ul>
+        </div>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

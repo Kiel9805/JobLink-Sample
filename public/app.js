@@ -12,9 +12,25 @@ let map = null;
 let userMarker = null;
 let markers = [];
 let companies = [];
+let active = -1; // index of the selected company
 let userPicked = false; // a map click wins over a late geolocation answer
 
 const $ = (id) => document.getElementById(id);
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text != null) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function link(href, text, className) {
+  const a = el('a', text, className);
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  return a;
+}
 
 function setStatus(text, isError = false) {
   $('status').textContent = text;
@@ -23,15 +39,12 @@ function setStatus(text, isError = false) {
 
 function setLocation(loc, label) {
   userLoc = loc;
-  $('location').textContent = `Searching near: ${label} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
+  $('location').replaceChildren(el('span', label, 'loc-name'), el('span', `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`, 'loc-coords'));
   if (userMarker) userMarker.setLatLng(loc);
 }
 
 function showMapMessage(text) {
-  const p = document.createElement('p');
-  p.className = 'map-message';
-  p.textContent = text;
-  $('map').replaceChildren(p);
+  $('map').replaceChildren(el('p', text, 'map-message'));
 }
 
 function initMap() {
@@ -47,9 +60,13 @@ function initMap() {
   }).addTo(map);
   map.on('click', (e) => {
     userPicked = true;
-    setLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, 'map point you picked');
+    setLocation({ lat: e.latlng.lat, lng: e.latlng.lng }, 'Point you picked on the map');
   });
-  userMarker = L.circleMarker(userLoc, { radius: 8, color: '#b91c1c' }).addTo(map).bindTooltip('You');
+  userMarker = L.marker(userLoc, {
+    icon: L.divIcon({ className: 'pin-you', iconSize: [18, 18] }),
+    keyboard: false,
+    zIndexOffset: -100,
+  }).addTo(map).bindTooltip('Search area', { direction: 'top', offset: [0, -10] });
 }
 
 function initLocation() {
@@ -59,12 +76,23 @@ function initLocation() {
     (pos) => {
       if (userPicked) return;
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setLocation(loc, 'your current location');
+      setLocation(loc, 'Your current location');
       if (map) map.setView(loc);
     },
     fallback,
     { timeout: 10000 },
   );
+}
+
+/* ---------- Upload ---------- */
+
+function showFile() {
+  const file = $('resume').files[0];
+  $('dropzone').classList.toggle('has-file', !!file);
+  $('file-name').textContent = file ? file.name : 'Drop your resume here';
+  $('file-hint').textContent = file
+    ? `${Math.max(1, Math.round(file.size / 1024))} KB. Click or drop to change.`
+    : 'or click to browse. PDF up to 5 MB.';
 }
 
 function readAsBase64(file) {
@@ -75,6 +103,8 @@ function readAsBase64(file) {
     reader.readAsDataURL(file);
   });
 }
+
+/* ---------- Results ---------- */
 
 function safeHttpUrl(value) {
   try {
@@ -87,100 +117,160 @@ function safeHttpUrl(value) {
 
 function directionsUrl(c, mode) {
   const u = new URL('https://www.google.com/maps/dir/');
-  u.search = new URLSearchParams({
-    api: '1',
-    destination: `${c.lat},${c.lng}`,
-    travelmode: mode,
-  });
+  u.search = new URLSearchParams({ api: '1', destination: `${c.lat},${c.lng}`, travelmode: mode });
   return u.href;
 }
 
-function el(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text != null) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
-
-function link(href, text) {
-  const a = el('a', text);
-  a.href = href;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  return a;
-}
-
-function companyDetails(c) {
-  const box = el('div', null, 'company');
-  box.append(el('h3', c.name));
-  if (c.address) box.append(el('p', c.address));
+// withHead adds the name and address, which the list row already shows but the map popup needs.
+function companyDetails(c, withHead) {
+  const box = el('div', null, 'detail');
+  if (withHead) {
+    const head = el('div', null, 'detail-head');
+    head.append(el('h3', c.name));
+    if (c.address) head.append(el('p', c.address));
+    box.append(head);
+  }
+  if (c.why) {
+    const why = el('p', null, 'why');
+    why.append(el('span', 'Why it fits', 'eyebrow'), c.why);
+    box.append(why);
+  }
   const site = safeHttpUrl(c.website);
   if (site) {
-    const p = el('p');
-    p.append(link(site, 'Website'));
+    const p = el('p', null, 'site');
+    p.append(link(site, 'Visit website'));
     box.append(p);
   }
-  if (c.why) box.append(el('p', `Why it matches: ${c.why}`, 'why'));
-  const dirs = el('p', 'Directions: ', 'directions');
-  MODES.forEach(([label, mode], i) => {
-    if (i) dirs.append(' · ');
-    dirs.append(link(directionsUrl(c, mode), label));
-  });
+  const dirs = el('div', null, 'directions');
+  const grid = el('div', null, 'dir-grid');
+  for (const [label, mode] of MODES) grid.append(link(directionsUrl(c, mode), label));
+  dirs.append(el('span', 'Directions', 'eyebrow'), grid);
   box.append(dirs);
   return box;
 }
 
-// Details always go in the sidebar too, so keyboard and screen-reader users never depend on the map popup.
-function showCompany(i) {
-  $('details').replaceChildren(companyDetails(companies[i]));
-  markers[i]?.openPopup();
+function selectTab(name, focus = false) {
+  for (const t of ['jobs', 'companies']) {
+    const on = t === name;
+    const tab = $(`tab-${t}`);
+    tab.setAttribute('aria-selected', String(on));
+    tab.tabIndex = on ? 0 : -1;
+    $(`panel-${t}`).hidden = !on;
+    if (on && focus) tab.focus();
+  }
+}
+
+// Expands the company in the list and highlights its marker. fromMap: the marker was clicked, so its popup is already opening.
+function showCompany(i, fromMap = false) {
+  if (active >= 0 && active !== i) {
+    const prev = $(`company-${active}`);
+    prev?.classList.remove('is-active');
+    prev?.querySelector('.company-row').setAttribute('aria-expanded', 'false');
+    prev?.querySelector('.company-details').replaceChildren();
+    prev?.querySelector('.company-details').setAttribute('hidden', '');
+    markers[active]?.getElement()?.classList.remove('is-active');
+    markers[active]?.setZIndexOffset(0);
+  }
+  active = i;
+  const item = $(`company-${i}`);
+  item.classList.add('is-active');
+  item.querySelector('.company-row').setAttribute('aria-expanded', 'true');
+  const details = item.querySelector('.company-details');
+  details.replaceChildren(companyDetails(companies[i], false));
+  details.hidden = false;
+  markers[i]?.getElement()?.classList.add('is-active');
+  markers[i]?.setZIndexOffset(1000);
+
+  if (fromMap) {
+    selectTab('companies');
+    item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else {
+    markers[i]?.openPopup();
+  }
 }
 
 function renderMarkers() {
   markers.forEach((m) => m.remove());
   markers = [];
   if (!map || !companies.length) return;
-  markers = companies.map((c) => L.marker(c, { title: c.name, alt: c.name })
+  markers = companies.map((c, i) => L.marker(c, {
+    icon: L.divIcon({ className: 'pin', html: String(i + 1), iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -12] }),
+    title: c.name,
+  })
     .addTo(map)
-    .bindPopup(() => companyDetails(c)));
-  map.fitBounds(L.latLngBounds([userLoc, ...companies]), { padding: [24, 24] });
+    // Top-left padding keeps the popup clear of the zoom buttons.
+    .bindPopup(() => companyDetails(c, true), { minWidth: 240, maxWidth: 300, autoPanPaddingTopLeft: [56, 16] })
+    .on('click', () => showCompany(i, true)));
+  map.fitBounds(L.latLngBounds([userLoc, ...companies]), { padding: [32, 32] });
+}
+
+function renderTags(id, items) {
+  $(id).replaceChildren(...(items.length ? items : ['None found']).map((t) => el('li', t)));
+}
+
+function renderJobs(jobs) {
+  $('jobs-count').textContent = jobs.length;
+  if (!jobs.length) {
+    $('jobs').replaceChildren(el('li', 'No job openings found for your top job title in this city. Try another search area.', 'empty'));
+    return;
+  }
+  $('jobs').replaceChildren(...jobs.map((j) => {
+    const li = el('li', null, 'job');
+    const href = safeHttpUrl(j.link);
+    li.append(href ? link(href, j.title, 'job-title') : el('p', j.title, 'job-title'));
+    const meta = el('p', null, 'job-meta');
+    for (const part of [j.company, j.location]) if (part) meta.append(el('span', part));
+    if (meta.childNodes.length) li.append(meta);
+    if (j.salary) li.append(el('p', j.salary, 'job-salary'));
+    if (j.snippet) li.append(el('p', j.snippet, 'job-snippet'));
+    return li;
+  }));
+}
+
+function renderCompanies() {
+  $('companies-count').textContent = companies.length;
+  if (!companies.length) {
+    $('results').replaceChildren(el('li', 'No matching companies found near this location. Try another search area.', 'empty'));
+    return;
+  }
+  $('results').replaceChildren(...companies.map((c, i) => {
+    const li = el('li', null, 'company-item');
+    li.id = `company-${i}`;
+    const row = el('button', null, 'company-row');
+    row.type = 'button';
+    row.setAttribute('aria-expanded', 'false');
+    row.setAttribute('aria-controls', `company-${i}-details`);
+    const text = el('span');
+    text.append(el('span', c.name, 'company-name'));
+    if (c.address) text.append(el('span', c.address, 'company-addr'));
+    row.append(el('span', String(i + 1), 'num'), text);
+    row.addEventListener('click', () => showCompany(i));
+    const details = el('div', null, 'company-details');
+    details.id = `company-${i}-details`;
+    details.hidden = true;
+    li.append(row, details);
+    return li;
+  }));
 }
 
 function renderResults(data) {
   const profile = data.profile || {};
-  $('profile-titles').textContent = (profile.titles || []).join(', ') || '—';
-  $('profile-skills').textContent = (profile.skills || []).join(', ') || '—';
+  renderTags('profile-titles', profile.titles || []);
+  renderTags('profile-skills', profile.skills || []);
   $('profile').hidden = false;
 
   const jobs = Array.isArray(data.jobs) ? data.jobs : [];
-  $('jobs-heading').hidden = !jobs.length;
-  $('jobs').replaceChildren(...jobs.map((j) => {
-    const li = el('li');
-    const href = safeHttpUrl(j.link);
-    const title = el('p', null, 'job-title');
-    title.append(href ? link(href, j.title) : j.title);
-    li.append(title);
-    const meta = [j.company, j.location, j.salary].filter(Boolean).join(' · ');
-    if (meta) li.append(el('p', meta, 'address'));
-    if (j.snippet) li.append(el('p', j.snippet, 'snippet'));
-    return li;
-  }));
-
   companies = Array.isArray(data.companies) ? data.companies : [];
-  $('details').replaceChildren();
-  $('results-heading').hidden = false;
-  $('results').replaceChildren(...companies.map((c, i) => {
-    const li = el('li');
-    const btn = el('button', c.name);
-    btn.type = 'button';
-    btn.addEventListener('click', () => showCompany(i));
-    li.append(btn);
-    if (c.address) li.append(el('span', c.address, 'address'));
-    return li;
-  }));
+  active = -1;
+  renderJobs(jobs);
+  renderCompanies();
   renderMarkers();
+
+  $('welcome').hidden = true;
+  $('result-tabs').hidden = false;
+  selectTab(jobs.length || !companies.length ? 'jobs' : 'companies');
   const found = [jobs.length && `${jobs.length} job openings`, companies.length && `${companies.length} companies`].filter(Boolean);
-  setStatus(found.length ? `Found ${found.join(' and ')}.` : 'No matching companies or jobs found near this location.');
+  setStatus(found.length ? `Found ${found.join(' and ')}.` : 'No matching jobs or companies found near this location.');
 }
 
 async function onSubmit(e) {
@@ -191,9 +281,11 @@ async function onSubmit(e) {
   if (file.size > MAX_PDF_BYTES) return setStatus('The PDF is larger than 5 MB. Please upload a smaller file.', true);
 
   const btn = $('search-btn');
+  const label = btn.textContent;
   btn.disabled = true;
+  btn.textContent = 'Searching...';
   document.body.setAttribute('aria-busy', 'true');
-  setStatus('Reading your resume and finding companies… this can take about 15 seconds.');
+  setStatus('Reading your resume and finding matches. This can take up to 15 seconds.');
   try {
     const pdfBase64 = await readAsBase64(file);
     const res = await fetch('/api/search', {
@@ -208,10 +300,23 @@ async function onSubmit(e) {
     setStatus(err.message || 'Search failed. Please try again.', true);
   } finally {
     btn.disabled = false;
+    btn.textContent = label;
     document.body.removeAttribute('aria-busy');
   }
 }
 
+/* ---------- Wiring ---------- */
+
 $('search-form').addEventListener('submit', onSubmit);
+$('resume').addEventListener('change', showFile);
+for (const type of ['dragenter', 'dragover']) $('resume').addEventListener(type, () => $('dropzone').classList.add('is-dragging'));
+for (const type of ['dragleave', 'drop']) $('resume').addEventListener(type, () => $('dropzone').classList.remove('is-dragging'));
+
+for (const name of ['jobs', 'companies']) $(`tab-${name}`).addEventListener('click', () => selectTab(name));
+$('result-tabs').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  selectTab($('tab-jobs').getAttribute('aria-selected') === 'true' ? 'companies' : 'jobs', true);
+});
+
 initMap();
 initLocation();
